@@ -450,7 +450,7 @@ async function research(){
     if(!ref){
       resetSpine();
       setStage("T","done"); flowLink(2,true);
-      if(parsed.pipeline?.demoMode) showDemoBanner(parsed.pipeline.note || parsed.note);
+      if(parsed.pipeline?.engine === "free") showDemoBanner(parsed.pipeline.note);
       else hideDemoBanner();
       renderNoMatch(parsed);
     } else {
@@ -460,8 +460,10 @@ async function research(){
       renderResult(lastResult);
       setStage("T","done"); flowLink(2,true);
     }
-    if(parsed.pipeline?.demoMode){
-      showDemoBanner(parsed.pipeline.note);
+    if(parsed.pipeline?.engine === "free"){
+      showDemoBanner("Free spec lookup — no paid API needed. Optional: add GEMINI_API_KEY (free tier) on Vercel for AI research.");
+    } else if(parsed.pipeline?.engine === "gemini"){
+      hideDemoBanner();
     } else {
       hideDemoBanner();
     }
