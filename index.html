@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Upgrade or Skip — an ETL pipeline you can click</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#0E1420;          /* page */
+    --panel:#161F30;        /* surface */
+    --panel-2:#1C2740;      /* raised */
+    --line:#28344C;         /* hairlines */
+    --text:#E7ECF4;         /* primary text */
+    --muted:#8B99B4;        /* secondary text */
+    --faint:#5C6884;        /* tertiary */
+    --teal:#33D6BE;         /* upgrade / load / primary */
+    --teal-ink:#062820;
+    --amber:#F2B34B;        /* toss-up */
+    --red:#F2686B;          /* worse */
+    --green:#4FD08A;        /* better */
+    --gray:#7C899F;         /* skip */
+    --radius:14px;
+    --shadow:0 18px 50px -24px rgba(0,0,0,.7);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1100px 620px at 82% -12%, rgba(51,214,190,.10), transparent 60%),
+      radial-gradient(900px 520px at 4% 8%, rgba(120,150,255,.06), transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:"Inter",system-ui,sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .wrap{max-width:1120px;margin:0 auto;padding:26px 22px 60px}
+
+  /* ---------- header ---------- */
+  .eyebrow{
+    font-family:"JetBrains Mono",monospace;
+    font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--teal);margin:0 0 8px;
+  }
+  h1{
+    font-family:"Space Grotesk",sans-serif;
+    font-weight:700;font-size:clamp(26px,4.6vw,44px);
+    letter-spacing:-.02em;margin:0;line-height:1.02;
+  }
+  h1 .dim{color:var(--faint)}
+  .sub{color:var(--muted);margin:10px 0 0;max-width:56ch;font-size:15px}
+
+  /* ---------- pipeline spine (the signature) ---------- */
+  .spine{
+    margin:26px 0 8px;padding:16px 18px;
+    background:linear-gradient(180deg,var(--panel),rgba(22,31,48,.6));
+    border:1px solid var(--line);border-radius:var(--radius);
+    display:flex;align-items:center;gap:0;overflow-x:auto;
+  }
+  .stage{display:flex;align-items:center;gap:12px;flex:1;min-width:150px}
+  .node{
+    width:38px;height:38px;flex:0 0 38px;border-radius:11px;
+    display:grid;place-items:center;
+    font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:16px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--faint);
+    transition:.35s ease;
+  }
+  .stage .meta{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .stage .name{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:14px;letter-spacing:-.01em}
+  .stage .role{font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--faint);letter-spacing:.02em;white-space:nowrap}
+  .link{flex:1;height:2px;min-width:22px;margin:0 6px;border-radius:2px;
+    background:linear-gradient(90deg,var(--line),var(--line));position:relative;overflow:hidden}
+  .link::after{content:"";position:absolute;inset:0;transform:translateX(-101%);
+    background:linear-gradient(90deg,transparent,var(--teal));transition:transform .5s ease}
+  .stage.active .node{border-color:var(--teal);color:var(--teal);box-shadow:0 0 0 4px rgba(51,214,190,.12);animation:pulse 1.1s ease-in-out infinite}
+  .stage.done .node{border-color:var(--teal);background:var(--teal);color:var(--teal-ink)}
+  .stage.done .role{color:var(--teal)}
+  .link.flow::after{transform:translateX(0)}
+  @keyframes pulse{50%{box-shadow:0 0 0 8px rgba(51,214,190,0)}}
+
+  /* ---------- two-column board ---------- */
+  .board{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:20px;margin-top:20px}
+  .col-h{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 12px}
+  .col-h h2{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:15px;margin:0;letter-spacing:.01em}
+  .tag{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+
+  /* inventory cards */
+  .inv{display:flex;flex-direction:column;gap:10px}
+  .card{
+    text-align:left;width:100%;cursor:pointer;color:inherit;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:13px 14px;display:flex;gap:12px;align-items:flex-start;
+    transition:.18s ease;position:relative;
+  }
+  .card:hover{border-color:#3a496a;transform:translateY(-1px)}
+  .card:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+  .card.sel{border-color:var(--teal);background:linear-gradient(180deg,rgba(51,214,190,.09),rgba(22,31,48,.5))}
+  .card.sel::before{content:"matched";position:absolute;top:-8px;left:12px;
+    font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--teal-ink);background:var(--teal);padding:2px 7px;border-radius:6px}
+  .card.fresh{animation:drop .5s ease}
+  @keyframes drop{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+  .cat{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);margin:0 0 3px}
+  .mdl{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:14.5px;margin:0;letter-spacing:-.01em}
+  .prc{color:var(--muted);font-size:12.5px;margin:2px 0 0;font-family:"JetBrains Mono",monospace}
+  .lock{margin-left:auto;color:var(--faint);font-size:13px;flex:0 0 auto}
+
+  /* right column */
+  .stack{display:flex;flex-direction:column;gap:16px}
+  .askbar{display:flex;gap:10px}
+  .field{flex:1;position:relative}
+  input[type=text]{
+    width:100%;background:var(--panel);border:1px solid var(--line);color:var(--text);
+    border-radius:12px;padding:14px 15px;font-size:15px;font-family:"Inter",sans-serif;
+  }
+  input[type=text]::placeholder{color:var(--faint)}
+  input[type=text]:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 4px rgba(51,214,190,.12)}
+  .btn{
+    border:none;cursor:pointer;border-radius:12px;padding:0 20px;
+    font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:14.5px;letter-spacing:.01em;
+    background:var(--teal);color:var(--teal-ink);transition:.16s ease;white-space:nowrap;
+  }
+  .btn:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px)}
+  .btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--teal);border:1px solid var(--teal)}
+  .btn.ghost:hover:not(:disabled){background:rgba(51,214,190,.1)}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .pad{padding:18px}
+
+  /* empty / loading / error */
+  .empty{padding:34px 22px;text-align:center;color:var(--muted)}
+  .empty .big{font-family:"Space Grotesk",sans-serif;color:var(--text);font-weight:600;font-size:17px;margin:0 0 6px}
+  .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--teal);animation:sp .7s linear infinite;margin:0 auto 14px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .err{border-color:rgba(242,104,107,.5)}
+  .err .big{color:var(--red)}
+
+  /* result table */
+  .res-head{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .res-head .who{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:15px}
+  .res-head .vs{color:var(--faint);font-family:"JetBrains Mono",monospace;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:11px 18px;border-bottom:1px solid var(--line)}
+  th{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:500}
+  td.spec{color:var(--muted)}
+  td.val{font-family:"JetBrains Mono",monospace;font-size:13px}
+  td.mark{text-align:center;width:54px;font-weight:700;font-size:15px}
+  .m-better{color:var(--green)} .m-worse{color:var(--red)} .m-same,.m-na{color:var(--faint)}
+  tr:last-child td{border-bottom:none}
+
+  /* verdict + finalize */
+  .foot{display:flex;align-items:center;gap:16px;padding:18px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .stamp{
+    font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:15px;letter-spacing:.08em;text-transform:uppercase;
+    padding:9px 16px;border-radius:10px;border:2px solid;transform:rotate(-2deg);
+  }
+  .stamp.upgrade{color:var(--teal);border-color:var(--teal);background:rgba(51,214,190,.08)}
+  .stamp.skip{color:var(--gray);border-color:var(--gray);background:rgba(124,137,159,.08)}
+  .stamp.tossup{color:var(--amber);border-color:var(--amber);background:rgba(242,179,75,.08)}
+  .reason{color:var(--muted);font-size:14px;flex:1;min-width:180px}
+  .foot .btn{padding:12px 18px}
+
+  /* toast */
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+    background:var(--teal);color:var(--teal-ink);font-family:"Space Grotesk",sans-serif;font-weight:600;
+    padding:12px 20px;border-radius:12px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.3s ease;z-index:9}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* import from spreadsheet */
+  .import{margin-top:14px;background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:12px 14px}
+  .import summary{cursor:pointer;font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;color:var(--teal);list-style:none}
+  .import summary::-webkit-details-marker{display:none}
+  .import[open] summary{margin-bottom:10px}
+  .import .hint{color:var(--muted);font-size:12px;margin:0 0 10px}
+  .import textarea{width:100%;background:var(--ink);border:1px solid var(--line);color:var(--text);border-radius:10px;
+    padding:10px 12px;font-family:"JetBrains Mono",monospace;font-size:12px;resize:vertical;white-space:pre;overflow-x:auto}
+  .import textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 4px rgba(51,214,190,.12)}
+  .import .btn{margin-top:10px;padding:9px 14px;font-size:13px}
+  .imp-msg{font-size:12px;margin:8px 0 0;min-height:1em;font-family:"JetBrains Mono",monospace}
+  .imp-msg.ok{color:var(--green)} .imp-msg.bad{color:var(--red)}
+
+  /* legend */
+  .legend{margin-top:22px;color:var(--faint);font-size:12px;font-family:"JetBrains Mono",monospace;display:flex;gap:18px;flex-wrap:wrap}
+  .legend b{color:var(--muted);font-weight:500}
+
+  @media (max-width:820px){
+    .board{grid-template-columns:1fr}
+    .spine{gap:0}
+    .stage{min-width:120px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Extract · Transform · Load</p>
+    <h1>Upgrade or Skip <span class="dim">/ the pipeline you can click</span></h1>
+    <p class="sub">You own things you've forgotten the specs of. Before you buy the shiny new one, run it through the pipeline: pull the real specs, force them into your inventory's shape, and get a verdict. Buy it, and it loads back into your inventory.</p>
+  </header>
+
+  <!-- SIGNATURE: the ETL spine -->
+  <div class="spine" id="spine">
+    <div class="stage" data-stage="E">
+      <div class="node">E</div>
+      <div class="meta"><span class="name">Extract</span><span class="role">research the product</span></div>
+    </div>
+    <div class="link" data-link="1"></div>
+    <div class="stage" data-stage="T">
+      <div class="node">T</div>
+      <div class="meta"><span class="name">Transform</span><span class="role">normalize + compare</span></div>
+    </div>
+    <div class="link" data-link="2"></div>
+    <div class="stage" data-stage="L">
+      <div class="node">L</div>
+      <div class="meta"><span class="name">Load</span><span class="role">write to inventory</span></div>
+    </div>
+  </div>
+
+  <div class="board">
+    <!-- LEFT: locked inventory -->
+    <section>
+      <div class="col-h">
+        <h2>Your inventory</h2>
+        <span class="tag">locked baseline</span>
+      </div>
+      <div class="inv" id="inv"></div>
+
+      <!-- LOAD from a spreadsheet: paste cleaned rows, click once -->
+      <details class="import">
+        <summary>Load your own inventory from a spreadsheet →</summary>
+        <p class="hint">Clean your data in a sheet, copy the cells (with the header row), and paste below. First row = the column names.</p>
+        <textarea id="imp" rows="5" placeholder="category&#9;brand&#9;model&#9;price&#9;battery&#9;releaseYear&#10;Earbuds&#9;boAt&#9;Airdopes 141&#9;₹1,299&#9;42h&#9;2022"></textarea>
+        <button class="btn ghost" id="loadInv">Load inventory</button>
+        <p class="imp-msg" id="impMsg"></p>
+      </details>
+    </section>
+
+    <!-- RIGHT: ask + result -->
+    <section class="stack">
+      <div class="askbar">
+        <div class="field">
+          <input id="q" type="text" placeholder="Name something you're tempted to buy…" autocomplete="off" />
+        </div>
+        <button class="btn" id="go">Research &amp; Compare</button>
+      </div>
+
+      <div class="panel" id="result">
+        <div class="empty">
+          <p class="big">Name something you're tempted to buy.</p>
+          <p>The tool finds the matching thing you already own and compares against it — no need to pick one.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="legend">
+    <span><b>▲</b> better than what you own</span>
+    <span><b>▼</b> worse</span>
+    <span><b>—</b> same / not comparable</span>
+  </div>
+</div>
+
+<div class="toast" id="toast">Loaded to inventory ✓</div>
+
+<script>
+/* ============================================================
+   1) CLEAN — pre-structured inventory (swap in real devices here)
+   Leads with "forgettable" gear, not a phone: you own it,
+   you can't remember the specs, so the comparison earns its keep.
+   ============================================================ */
+let INVENTORY = [
+  { id:"ear",   category:"Wireless Earbuds", brand:"Sony",   model:"WF-C500",     price:"₹4,500", battery:"10h (+10h case)", noiseCancelling:"No",        bluetooth:"5.0",     releaseYear:"2021" },
+  { id:"watch", category:"Smartwatch",       brand:"Amazfit",model:"Bip U",       price:"₹3,499", display:"1.43\" TFT",      battery:"9 days",            gps:"Connected GPS", releaseYear:"2020" },
+  { id:"spkr",  category:"Bluetooth Speaker",brand:"JBL",    model:"Flip 5",      price:"₹7,999", power:"20W",               battery:"12h",               waterproof:"IPX7",   releaseYear:"2019" },
+  { id:"bank",  category:"Power Bank",       brand:"Mi",     model:"3i 10000mAh", price:"₹999",   capacity:"10000mAh",       output:"18W fast",           ports:"2 in / 1 out",releaseYear:"2021" },
+  { id:"rtr",   category:"Wi-Fi Router",     brand:"TP-Link",model:"Archer C6",   price:"₹2,199", speed:"1200 Mbps",         bands:"Dual-band",           wifi:"Wi-Fi 5",      releaseYear:"2018" }
+];
+let selectedId = null;
+let lastResult = null;   // holds the researched product between Transform and Load
+
+const $ = s => document.querySelector(s);
+const invEl = $("#inv"), resEl = $("#result"), qEl = $("#q"), goEl = $("#go");
+
+/* ---- render the locked inventory ---- */
+function renderInventory(freshId){
+  invEl.innerHTML = "";
+  INVENTORY.forEach(item=>{
+    const b = document.createElement("button");
+    b.className = "card" + (item.id===selectedId?" sel":"") + (item.id===freshId?" fresh":"");
+    b.setAttribute("aria-pressed", item.id===selectedId);
+    b.innerHTML =
+      `<div><p class="cat">${esc(item.category)}</p>
+        <p class="mdl">${esc(item.brand)} ${esc(item.model)}</p>
+        <p class="prc">${esc(item.price)} · ${esc(item.releaseYear)}</p></div>
+       <span class="lock" aria-hidden="true">🔒</span>`;
+    b.onclick = ()=>{ selectedId=item.id; renderInventory(); };
+    invEl.appendChild(b);
+  });
+}
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const selected = ()=> INVENTORY.find(i=>i.id===selectedId);
+
+/* ---- ETL spine control ---- */
+function setStage(stage, state){ // state: 'active' | 'done' | ''
+  const el = document.querySelector(`.stage[data-stage="${stage}"]`);
+  el.classList.remove("active","done"); if(state) el.classList.add(state);
+}
+function flowLink(n,on){ document.querySelector(`.link[data-link="${n}"]`).classList.toggle("flow",on); }
+function resetSpine(){ ["E","T","L"].forEach(s=>setStage(s,"")); flowLink(1,false); flowLink(2,false); }
+
+/* ============================================================
+   2) NORMALIZE + 3) ENRICH — send reference item to the model,
+   force the new product into the SAME schema, get a comparison.
+   ============================================================ */
+async function research(){
+  const query = qEl.value.trim();
+  if(!query){ qEl.focus(); return; }
+  if(!INVENTORY.length){
+    resEl.innerHTML = `<div class="empty"><p class="big">Your inventory is empty.</p><p>Load a few devices you own first, then type what you're tempted to buy.</p></div>`;
+    return;
+  }
+
+  goEl.disabled = true;
+  resetSpine();
+  setStage("E","active");                // Extract: request goes out
+  resEl.innerHTML = `<div class="empty"><div class="spin"></div><p class="big">Running the pipeline…</p><p>Finding what you own that matches “${esc(query)}”, then comparing spec by spec.</p></div>`;
+
+  // Send the WHOLE inventory — the model picks which item to compare against, so nobody has to select one first.
+  const system =
+`You are the enrichment engine in an ETL pipeline. The user has an INVENTORY of devices they already own (JSON, each with an "id"). They will type the NAME of a new product they're considering.
+
+Your job:
+1. Work out the new product's category, then pick the SINGLE inventory item in the same (or closest) category to compare against. Use its exact "id".
+2. Research the new product's real specs and express them using EXACTLY the same keys as that matched item (excluding "id").
+3. Compare spec by spec, from the user's point of view.
+
+Return ONLY a JSON object (no markdown, no code fences):
+{
+  "matchedId": "<id of the inventory item you compared against, or null if nothing in inventory is a reasonable match>",
+  "product": { <same keys as the matched item, excluding id> },
+  "comparison": [ { "spec": "<label>", "old": "<value you own>", "new": "<new value>", "mark": "better|worse|same|na" } ],
+  "verdict": "upgrade|skip|tossup",
+  "reason": "<one sentence, max 22 words, plain language>",
+  "note": "<if matchedId is null: one friendly sentence saying they own nothing comparable; otherwise empty>"
+}
+
+Rules:
+- "matchedId" MUST be one of the ids from the inventory, or null. Never invent an id.
+- If matchedId is null: set product to {}, comparison to [], and fill "note".
+- "mark" is from the user's perspective: is the NEW product better, worse, same, or not comparable (na) on that spec? Cheaper price = better.
+- 4-6 comparison rows. Keep values short, same units as the matched item.`;
+
+  const user =
+`My inventory (things I already own):
+${JSON.stringify(INVENTORY, null, 2)}
+
+New product I'm considering: "${query}"
+
+Return only the JSON object.`;
+
+  try{
+    const r = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:1000,
+        system,
+        messages:[{role:"user",content:user}]
+      })
+    });
+    const data = await r.json();
+
+    setStage("E","done"); flowLink(1,true); setStage("T","active");  // Extract done → Transform
+
+    const raw = (data.content||[])
+      .filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+    const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
+
+    const ref = INVENTORY.find(i=>i.id===parsed.matchedId);
+    if(!ref){
+      resetSpine();
+      resEl.innerHTML = `<div class="pad"><div class="empty" style="padding:14px 0">
+        <p class="big">Nothing comparable in your inventory yet</p>
+        <p>${esc(parsed.note || "You don't own anything in the same category, so there's nothing to compare this against.")}</p></div></div>`;
+    } else {
+      selectedId = ref.id; renderInventory();          // light up the item it auto-matched
+      lastResult = { query, ref, ...parsed };
+      renderResult(lastResult);
+      setStage("T","done"); flowLink(2,true);          // Transform done, Load waiting
+    }
+  }catch(e){
+    resetSpine();
+    resEl.innerHTML = `<div class="pad err"><div class="empty" style="padding:14px 0">
+      <p class="big">The pipeline couldn't parse that.</p>
+      <p>The research came back in a shape we couldn't read. Try a more specific product name (add the brand or model), then run it again.</p></div></div>`;
+  }finally{
+    goEl.disabled = false;
+  }
+}
+const strip = o => { const c={...o}; delete c.id; return c; };
+
+/* ============================================================
+   4) MAP — render comparison → arrows, verdict stamp, Load button
+   ============================================================ */
+function renderResult(res){
+  const marks = {better:"▲",worse:"▼",same:"—",na:"—"};
+  const rows = (res.comparison||[]).map(row=>{
+    const m = (row.mark||"na").toLowerCase();
+    return `<tr>
+      <td class="spec">${esc(row.spec)}</td>
+      <td class="val">${esc(row.old)}</td>
+      <td class="val">${esc(row.new)}</td>
+      <td class="mark m-${m}">${marks[m]||"—"}</td>
+    </tr>`;
+  }).join("");
+
+  const v = (res.verdict||"tossup").toLowerCase();
+  const label = {upgrade:"Upgrade",skip:"Skip",tossup:"Toss-up"}[v]||"Toss-up";
+  const p = res.product||{};
+  const newName = `${p.brand||""} ${p.model||res.query}`.trim();
+
+  resEl.innerHTML = `
+    <div class="res-head">
+      <span class="who">${esc(res.ref.brand)} ${esc(res.ref.model)}</span>
+      <span class="vs">vs</span>
+      <span class="who">${esc(newName)}</span>
+    </div>
+    <p style="padding:2px 18px 0;margin:0;color:var(--faint);font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.02em">auto-matched to the ${esc(res.ref.category)} you already own</p>
+    <table>
+      <thead><tr><th>Spec</th><th>You own</th><th>New</th><th style="text-align:center">Δ</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="foot">
+      <span class="stamp ${v}">${label}</span>
+      <span class="reason">${esc(res.reason||"")}</span>
+      <button class="btn ghost" id="finalize">Finalize purchase → Load to inventory</button>
+    </div>`;
+
+  $("#finalize").onclick = ()=>finalize(res);
+}
+
+/* ---- LOAD: write the finalized purchase into the locked inventory ---- */
+function finalize(res){
+  setStage("L","active");
+  const p = res.product || {};
+  const item = { id:"buy"+Date.now(), ...res.ref, ...p }; // inherits ref's key shape, overwrites with new values
+  item.model = p.model || res.query;
+  INVENTORY.push(item);
+  selectedId = item.id;
+  renderInventory(item.id);
+
+  setTimeout(()=>{ setStage("L","done"); toast(); }, 250);
+
+  const btn = $("#finalize");
+  if(btn){ btn.textContent = "Loaded ✓"; btn.disabled = true; }
+}
+function toast(){
+  const t = $("#toast"); t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 1900);
+}
+
+/* ============================================================
+   LOAD (the takeaway step) — turn pasted spreadsheet rows into
+   inventory. The header row IS the schema: whatever columns you
+   bring become the shape everything else is compared against.
+   ============================================================ */
+function loadInventory(){
+  const raw = $("#imp").value.trim();
+  const msg = $("#impMsg");
+  if(!raw){ msg.className="imp-msg bad"; msg.textContent="Paste some rows first (include the header row)."; return; }
+
+  const lines = raw.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length < 2){ msg.className="imp-msg bad"; msg.textContent="Need a header row plus at least one device."; return; }
+
+  // tab-separated if the paste has tabs (Excel/Sheets), otherwise comma
+  const sep = lines[0].includes("\t") ? "\t" : ",";
+  const cut = l => l.split(sep).map(c=>c.trim().replace(/^"|"$/g,""));
+  const headers = cut(lines[0]).map(h=>h.toLowerCase());
+
+  const need = ["category","brand","model"];
+  const missing = need.filter(k=>!headers.includes(k));
+  if(missing.length){ msg.className="imp-msg bad"; msg.textContent="Header row is missing: "+missing.join(", ")+"."; return; }
+
+  const rows = lines.slice(1).map((line,i)=>{
+    const cells = cut(line);
+    const obj = { id:"imp"+i };
+    headers.forEach((h,j)=> obj[h] = cells[j]!==undefined ? cells[j] : "");
+    return obj;
+  });
+
+  INVENTORY = rows;
+  selectedId = null;
+  renderInventory();
+  resEl.innerHTML = `<div class="empty"><p class="big">Inventory loaded.</p><p>Name something you're tempted to buy — it'll find the match.</p></div>`;
+  resetSpine();
+  msg.className="imp-msg ok"; msg.textContent="Loaded "+rows.length+" device"+(rows.length>1?"s":"")+" \u2713";
+}
+
+/* ---- wire up ---- */
+goEl.onclick = research;
+$("#loadInv").onclick = loadInventory;
+qEl.addEventListener("keydown", e=>{ if(e.key==="Enter") research(); });
+renderInventory();
+</script>
+</body>
+</html>
