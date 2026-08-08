@@ -190,10 +190,35 @@
   .legend{margin-top:22px;color:var(--faint);font-size:12px;font-family:"JetBrains Mono",monospace;display:flex;gap:18px;flex-wrap:wrap}
   .legend b{color:var(--muted);font-weight:500}
 
+  /* workshop: backend activity */
+  .backend{margin-top:28px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .backend-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .backend-h h2{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:15px;margin:0}
+  .backend-h p{margin:4px 0 0;color:var(--muted);font-size:12.5px;max-width:70ch}
+  .counters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .counter{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .counter .k{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .counter .v{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:22px;margin-top:4px}
+  .counter.load .v{color:var(--teal)}
+  .counter.read .v{color:var(--green)}
+  .counter.extract .v{color:var(--amber)}
+  .counter.transform .v{color:var(--red)}
+  .log{padding:12px 18px 16px;max-height:220px;overflow:auto}
+  .logline{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid rgba(40,52,76,.55);font-size:12px}
+  .logline:last-child{border-bottom:none}
+  .badge{font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:6px;flex:0 0 auto;height:fit-content}
+  .badge.LOAD{background:rgba(51,214,190,.15);color:var(--teal)}
+  .badge.READ{background:rgba(79,208,138,.12);color:var(--green)}
+  .badge.EXTRACT{background:rgba(242,179,75,.12);color:var(--amber)}
+  .badge.TRANSFORM{background:rgba(242,104,107,.12);color:var(--red)}
+  .logmsg{color:var(--muted)}
+  .teach{padding:0 18px 16px;color:var(--muted);font-size:12.5px}
+
   @media (max-width:820px){
     .board{grid-template-columns:1fr}
     .spine{gap:0}
     .stage{min-width:120px}
+    .counters{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
   @media (prefers-reduced-motion:reduce){
     *{animation:none!important;transition:none!important}
@@ -269,28 +294,77 @@
     <span><b>▼</b> worse</span>
     <span><b>—</b> same / not comparable</span>
   </div>
+
+  <section class="backend" aria-label="Backend pipeline activity">
+    <div class="backend-h">
+      <div>
+        <h2>Backend warehouse activity</h2>
+        <p>For your workshop: <strong style="color:var(--teal)">LOAD</strong> should happen once. Every comparison only <strong style="color:var(--green)">READ</strong>s that stored data — the spreadsheet is never parsed again.</p>
+      </div>
+      <span class="tag" id="loadedAt">warehouse ready</span>
+    </div>
+    <div class="counters">
+      <div class="counter load"><div class="k">Load ops</div><div class="v" id="cLoad">0</div></div>
+      <div class="counter read"><div class="k">Read ops</div><div class="v" id="cRead">0</div></div>
+      <div class="counter extract"><div class="k">Extract ops</div><div class="v" id="cExtract">0</div></div>
+      <div class="counter transform"><div class="k">Transform ops</div><div class="v" id="cTransform">0</div></div>
+    </div>
+    <p class="teach" id="teachNote">Load your inventory once, then run several comparisons. Watch READ climb while LOAD stays at 1.</p>
+    <div class="log" id="pipeLog"><div class="logline"><span class="logmsg">Waiting for pipeline events…</span></div></div>
+  </section>
 </div>
 
 <div class="toast" id="toast">Loaded to inventory ✓</div>
 
 <script>
 /* ============================================================
-   1) CLEAN — pre-structured inventory (swap in real devices here)
-   Leads with "forgettable" gear, not a phone: you own it,
-   you can't remember the specs, so the comparison earns its keep.
+   Frontend talks to the backend warehouse:
+   - LOAD once via POST /api/load
+   - READ on every comparison via GET /api/inventory (inside /api/research)
+   - EXTRACT + TRANSFORM per product via POST /api/research
    ============================================================ */
-let INVENTORY = [
-  { id:"ear",   category:"Wireless Earbuds", brand:"Sony",   model:"WF-C500",     price:"₹4,500", battery:"10h (+10h case)", noiseCancelling:"No",        bluetooth:"5.0",     releaseYear:"2021" },
-  { id:"watch", category:"Smartwatch",       brand:"Amazfit",model:"Bip U",       price:"₹3,499", display:"1.43\" TFT",      battery:"9 days",            gps:"Connected GPS", releaseYear:"2020" },
-  { id:"spkr",  category:"Bluetooth Speaker",brand:"JBL",    model:"Flip 5",      price:"₹7,999", power:"20W",               battery:"12h",               waterproof:"IPX7",   releaseYear:"2019" },
-  { id:"bank",  category:"Power Bank",       brand:"Mi",     model:"3i 10000mAh", price:"₹999",   capacity:"10000mAh",       output:"18W fast",           ports:"2 in / 1 out",releaseYear:"2021" },
-  { id:"rtr",   category:"Wi-Fi Router",     brand:"TP-Link",model:"Archer C6",   price:"₹2,199", speed:"1200 Mbps",         bands:"Dual-band",           wifi:"Wi-Fi 5",      releaseYear:"2018" }
-];
+let INVENTORY = [];
 let selectedId = null;
-let lastResult = null;   // holds the researched product between Transform and Load
+let lastResult = null;
 
 const $ = s => document.querySelector(s);
 const invEl = $("#inv"), resEl = $("#result"), qEl = $("#q"), goEl = $("#go");
+const API = "";
+
+async function refreshPipeline(){
+  try{
+    const r = await fetch(`${API}/api/pipeline`);
+    const data = await r.json();
+    if(!data.success) return;
+    $("#cLoad").textContent = data.loadCount;
+    $("#cRead").textContent = data.readCount;
+    $("#cExtract").textContent = data.extractCount;
+    $("#cTransform").textContent = data.transformCount;
+    $("#loadedAt").textContent = data.loadedAt
+      ? `loaded ${new Date(data.loadedAt).toLocaleString()}`
+      : "warehouse ready";
+    $("#teachNote").textContent = data.teachingNote || "";
+    const logEl = $("#pipeLog");
+    if(!data.log?.length){
+      logEl.innerHTML = `<div class="logline"><span class="logmsg">No pipeline events yet.</span></div>`;
+      return;
+    }
+    logEl.innerHTML = data.log.map(row=>`
+      <div class="logline">
+        <span class="badge ${esc(row.stage)}">${esc(row.stage)}</span>
+        <span class="logmsg">${esc(row.message)}</span>
+      </div>`).join("");
+  }catch(_){}
+}
+
+async function fetchInventory(){
+  const r = await fetch(`${API}/api/inventory`);
+  const data = await r.json();
+  if(!data.success) throw new Error(data.message || "Could not read warehouse.");
+  INVENTORY = data.items || [];
+  await refreshPipeline();
+  return data;
+}
 
 /* ---- render the locked inventory ---- */
 function renderInventory(freshId){
@@ -333,78 +407,42 @@ async function research(){
 
   goEl.disabled = true;
   resetSpine();
-  setStage("E","active");                // Extract: request goes out
-  resEl.innerHTML = `<div class="empty"><div class="spin"></div><p class="big">Running the pipeline…</p><p>Finding what you own that matches “${esc(query)}”, then comparing spec by spec.</p></div>`;
-
-  // Send the WHOLE inventory — the model picks which item to compare against, so nobody has to select one first.
-  const system =
-`You are the enrichment engine in an ETL pipeline. The user has an INVENTORY of devices they already own (JSON, each with an "id"). They will type the NAME of a new product they're considering.
-
-Your job:
-1. Work out the new product's category, then pick the SINGLE inventory item in the same (or closest) category to compare against. Use its exact "id".
-2. Research the new product's real specs and express them using EXACTLY the same keys as that matched item (excluding "id").
-3. Compare spec by spec, from the user's point of view.
-
-Return ONLY a JSON object (no markdown, no code fences):
-{
-  "matchedId": "<id of the inventory item you compared against, or null if nothing in inventory is a reasonable match>",
-  "product": { <same keys as the matched item, excluding id> },
-  "comparison": [ { "spec": "<label>", "old": "<value you own>", "new": "<new value>", "mark": "better|worse|same|na" } ],
-  "verdict": "upgrade|skip|tossup",
-  "reason": "<one sentence, max 22 words, plain language>",
-  "note": "<if matchedId is null: one friendly sentence saying they own nothing comparable; otherwise empty>"
-}
-
-Rules:
-- "matchedId" MUST be one of the ids from the inventory, or null. Never invent an id.
-- If matchedId is null: set product to {}, comparison to [], and fill "note".
-- "mark" is from the user's perspective: is the NEW product better, worse, same, or not comparable (na) on that spec? Cheaper price = better.
-- 4-6 comparison rows. Keep values short, same units as the matched item.`;
-
-  const user =
-`My inventory (things I already own):
-${JSON.stringify(INVENTORY, null, 2)}
-
-New product I'm considering: "${query}"
-
-Return only the JSON object.`;
+  setStage("E","active");
+  resEl.innerHTML = `<div class="empty"><div class="spin"></div><p class="big">Running the pipeline…</p><p>Backend is READing your warehouse, then EXTRACTing specs for “${esc(query)}”.</p></div>`;
 
   try{
-    const r = await fetch("https://api.anthropic.com/v1/messages",{
+    const r = await fetch(`${API}/api/research`,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        model:"claude-sonnet-4-6",
-        max_tokens:1000,
-        system,
-        messages:[{role:"user",content:user}]
-      })
+      body:JSON.stringify({ query })
     });
-    const data = await r.json();
+    const parsed = await r.json();
 
-    setStage("E","done"); flowLink(1,true); setStage("T","active");  // Extract done → Transform
+    setStage("E","done"); flowLink(1,true); setStage("T","active");
 
-    const raw = (data.content||[])
-      .filter(b=>b.type==="text").map(b=>b.text).join("").trim();
-    const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
+    if(!r.ok || !parsed.success){
+      throw new Error(parsed.message || "Research failed.");
+    }
 
-    const ref = INVENTORY.find(i=>i.id===parsed.matchedId);
+    const ref = parsed.ref;
     if(!ref){
       resetSpine();
       resEl.innerHTML = `<div class="pad"><div class="empty" style="padding:14px 0">
         <p class="big">Nothing comparable in your inventory yet</p>
         <p>${esc(parsed.note || "You don't own anything in the same category, so there's nothing to compare this against.")}</p></div></div>`;
     } else {
-      selectedId = ref.id; renderInventory();          // light up the item it auto-matched
+      selectedId = ref.id;
+      renderInventory();
       lastResult = { query, ref, ...parsed };
       renderResult(lastResult);
-      setStage("T","done"); flowLink(2,true);          // Transform done, Load waiting
+      setStage("T","done"); flowLink(2,true);
     }
+    await refreshPipeline();
   }catch(e){
     resetSpine();
     resEl.innerHTML = `<div class="pad err"><div class="empty" style="padding:14px 0">
-      <p class="big">The pipeline couldn't parse that.</p>
-      <p>The research came back in a shape we couldn't read. Try a more specific product name (add the brand or model), then run it again.</p></div></div>`;
+      <p class="big">The pipeline couldn't complete.</p>
+      <p>${esc(e.message || "Try a more specific product name, then run it again.")}</p></div></div>`;
   }finally{
     goEl.disabled = false;
   }
@@ -451,20 +489,30 @@ function renderResult(res){
   $("#finalize").onclick = ()=>finalize(res);
 }
 
-/* ---- LOAD: write the finalized purchase into the locked inventory ---- */
-function finalize(res){
+/* ---- LOAD: write the finalized purchase into the warehouse ---- */
+async function finalize(res){
   setStage("L","active");
   const p = res.product || {};
-  const item = { id:"buy"+Date.now(), ...res.ref, ...p }; // inherits ref's key shape, overwrites with new values
-  item.model = p.model || res.query;
-  INVENTORY.push(item);
-  selectedId = item.id;
-  renderInventory(item.id);
-
-  setTimeout(()=>{ setStage("L","done"); toast(); }, 250);
-
-  const btn = $("#finalize");
-  if(btn){ btn.textContent = "Loaded ✓"; btn.disabled = true; }
+  try{
+    const r = await fetch(`${API}/api/append`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ ref: res.ref, product: p, query: res.query })
+    });
+    const data = await r.json();
+    if(!r.ok || !data.success) throw new Error(data.message || "Could not append purchase.");
+    const item = data.item;
+    INVENTORY.push(item);
+    selectedId = item.id;
+    renderInventory(item.id);
+    await refreshPipeline();
+    setTimeout(()=>{ setStage("L","done"); toast(); }, 250);
+    const btn = $("#finalize");
+    if(btn){ btn.textContent = "Loaded ✓"; btn.disabled = true; }
+  }catch(e){
+    setStage("L","");
+    alert(e.message || "Could not load purchase to warehouse.");
+  }
 }
 function toast(){
   const t = $("#toast"); t.classList.add("show");
@@ -476,43 +524,41 @@ function toast(){
    inventory. The header row IS the schema: whatever columns you
    bring become the shape everything else is compared against.
    ============================================================ */
-function loadInventory(){
+async function loadInventory(){
   const raw = $("#imp").value.trim();
   const msg = $("#impMsg");
   if(!raw){ msg.className="imp-msg bad"; msg.textContent="Paste some rows first (include the header row)."; return; }
 
-  const lines = raw.split(/\r?\n/).filter(l=>l.trim());
-  if(lines.length < 2){ msg.className="imp-msg bad"; msg.textContent="Need a header row plus at least one device."; return; }
+  try{
+    const r = await fetch(`${API}/api/load`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ raw })
+    });
+    const data = await r.json();
+    if(!r.ok || !data.success) throw new Error(data.message || "Load failed.");
 
-  // tab-separated if the paste has tabs (Excel/Sheets), otherwise comma
-  const sep = lines[0].includes("\t") ? "\t" : ",";
-  const cut = l => l.split(sep).map(c=>c.trim().replace(/^"|"$/g,""));
-  const headers = cut(lines[0]).map(h=>h.toLowerCase());
-
-  const need = ["category","brand","model"];
-  const missing = need.filter(k=>!headers.includes(k));
-  if(missing.length){ msg.className="imp-msg bad"; msg.textContent="Header row is missing: "+missing.join(", ")+"."; return; }
-
-  const rows = lines.slice(1).map((line,i)=>{
-    const cells = cut(line);
-    const obj = { id:"imp"+i };
-    headers.forEach((h,j)=> obj[h] = cells[j]!==undefined ? cells[j] : "");
-    return obj;
-  });
-
-  INVENTORY = rows;
-  selectedId = null;
-  renderInventory();
-  resEl.innerHTML = `<div class="empty"><p class="big">Inventory loaded.</p><p>Name something you're tempted to buy — it'll find the match.</p></div>`;
-  resetSpine();
-  msg.className="imp-msg ok"; msg.textContent="Loaded "+rows.length+" device"+(rows.length>1?"s":"")+" \u2713";
+    INVENTORY = data.items || [];
+    selectedId = null;
+    renderInventory();
+    resEl.innerHTML = `<div class="empty"><p class="big">Inventory loaded to warehouse.</p><p>Name something you're tempted to buy — backend will READ stored data, not your sheet.</p></div>`;
+    resetSpine();
+    await refreshPipeline();
+    msg.className="imp-msg ok";
+    msg.textContent = data.message || (`Loaded ${data.loaded} device(s) ✓`);
+  }catch(e){
+    msg.className="imp-msg bad";
+    msg.textContent = e.message || "Could not load inventory.";
+  }
 }
 
 /* ---- wire up ---- */
 goEl.onclick = research;
 $("#loadInv").onclick = loadInventory;
 qEl.addEventListener("keydown", e=>{ if(e.key==="Enter") research(); });
-renderInventory();
+fetchInventory().then(()=>renderInventory()).catch(()=>{
+  invEl.innerHTML = `<div class="empty"><p class="big">Backend unavailable</p><p>Deploy with the /api routes to run the warehouse demo.</p></div>`;
+});
 </script>
 </body>
 </html>
