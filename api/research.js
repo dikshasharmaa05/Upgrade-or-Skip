@@ -48,7 +48,9 @@ module.exports = async (req, res) => {
     const query = String(body.query || "").trim();
     if (!query) return res.status(400).json({ success: false, message: "Enter a product name to research." });
 
-    const inventory = getInventory();
+    const inventory = Array.isArray(body.inventory) && body.inventory.length
+      ? body.inventory
+      : getInventory();
     if (!inventory.length) return res.status(400).json({ success: false, message: "Warehouse is empty. Load inventory first." });
 
     recordExtract(query);
@@ -103,7 +105,7 @@ module.exports = async (req, res) => {
         demoMode,
         note: demoMode
           ? "Live research needs ANTHROPIC_API_KEY on Vercel. Showing demo comparison for now."
-          : "LLM researched online specs. Inventory was READ from warehouse — spreadsheet not reopened.",
+          : "LLM researched online specs. Inventory was READ from warehouse â€” spreadsheet not reopened.",
       },
     });
   } catch (error) {

@@ -332,6 +332,20 @@
 let INVENTORY = [];
 let selectedId = null;
 let lastResult = null;
+const INV_KEY = "uos_inventory";
+
+function saveInventoryLocal(){
+  try { localStorage.setItem(INV_KEY, JSON.stringify(INVENTORY)); } catch(_){}
+}
+function loadInventoryLocal(){
+  try {
+    const raw = localStorage.getItem(INV_KEY);
+    if(!raw) return false;
+    const items = JSON.parse(raw);
+    if(Array.isArray(items) && items.length){ INVENTORY = items; return true; }
+  } catch(_){}
+  return false;
+}
 
 const $ = s => document.querySelector(s);
 const invEl = $("#inv"), resEl = $("#result"), qEl = $("#q"), goEl = $("#go");
@@ -364,10 +378,12 @@ async function refreshPipeline(){
 }
 
 async function fetchInventory(){
+  if(loadInventoryLocal()) return { items: INVENTORY };
   const r = await fetch(`${API}/api/inventory`);
   const data = await r.json();
   if(!data.success) throw new Error(data.message || "Could not read warehouse.");
   INVENTORY = data.items || [];
+  saveInventoryLocal();
   await refreshPipeline();
   return data;
 }
@@ -420,7 +436,7 @@ async function research(){
     const r = await fetch(`${API}/api/research`,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ query })
+      body:JSON.stringify({ query, inventory: INVENTORY })
     });
     const parsed = await r.json();
 
@@ -548,6 +564,7 @@ async function loadUnmatchedToInventory(query){
     const data = await r.json();
     if(!r.ok || !data.success) throw new Error(data.message || "Could not load to inventory.");
     INVENTORY.push(data.item);
+    saveInventoryLocal();
     selectedId = data.item.id;
     renderInventory(data.item.id);
     await refreshPipeline();
@@ -574,6 +591,7 @@ async function finalize(res){
     if(!r.ok || !data.success) throw new Error(data.message || "Could not append purchase.");
     const item = data.item;
     INVENTORY.push(item);
+    saveInventoryLocal();
     selectedId = item.id;
     renderInventory(item.id);
     await refreshPipeline();
@@ -624,6 +642,7 @@ async function loadInventory(){
     if(!r.ok || !data.success) throw new Error(data.message || "Load failed.");
 
     INVENTORY = data.items || [];
+    saveInventoryLocal();
     selectedId = null;
     renderInventory();
     resEl.innerHTML = `<div class="empty"><p class="big">Inventory loaded to warehouse.</p><p>Name something you're tempted to buy — backend will READ stored data, not your sheet.</p></div>`;
