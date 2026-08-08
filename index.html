@@ -414,7 +414,7 @@ async function research(){
   goEl.disabled = true;
   resetSpine();
   setStage("E","active");
-  resEl.innerHTML = `<div class="empty"><div class="spin"></div><p class="big">Running the pipeline…</p><p>Backend is READing your warehouse, then EXTRACTing specs for “${esc(query)}”.</p></div>`;
+  resEl.innerHTML = `<div class="empty"><div class="spin"></div><p class="big">Running the pipeline…</p><p>READing warehouse inventory, then researching “${esc(query)}” online and comparing specs.</p></div>`;
 
   try{
     const r = await fetch(`${API}/api/research`,{
@@ -430,7 +430,7 @@ async function research(){
       throw new Error(parsed.message || "Research failed.");
     }
 
-    const ref = parsed.ref;
+    const ref = parsed.ref || (parsed.matchedId ? INVENTORY.find(i => i.id === parsed.matchedId) : null);
     if(!ref){
       resetSpine();
       setStage("T","done"); flowLink(2,true);
