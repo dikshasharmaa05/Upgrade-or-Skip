@@ -264,8 +264,8 @@
       <!-- LOAD from a spreadsheet: paste cleaned rows, click once -->
       <details class="import">
         <summary>Load your own inventory from a spreadsheet →</summary>
-        <p class="hint">Clean your data in a sheet, copy the cells (with the header row), and paste below. First row = the column names.</p>
-        <textarea id="imp" rows="5" placeholder="category&#9;brand&#9;model&#9;price&#9;battery&#9;releaseYear&#10;Earbuds&#9;boAt&#9;Airdopes 141&#9;₹1,299&#9;42h&#9;2022"></textarea>
+        <p class="hint"><strong>How to upload:</strong> In Google Sheets or Excel, select your cells <em>including the header row</em> → Copy (Ctrl+C) → Paste below → click <strong>Load inventory</strong>. Required columns: <code>category</code>, <code>brand</code>, <code>model</code>. Tip: copy directly from the sheet so columns stay tab-separated (prices like ₹1,299 work better that way).</p>
+        <textarea id="imp" rows="5" placeholder="category	brand	model	price	battery	releaseYear&#10;Earbuds	boAt	Airdopes 141	₹1,299	42h	2022"></textarea>
         <button class="btn ghost" id="loadInv">Load inventory</button>
         <p class="imp-msg" id="impMsg"></p>
       </details>
