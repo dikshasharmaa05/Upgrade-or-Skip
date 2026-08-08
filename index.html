@@ -214,6 +214,12 @@
   .logmsg{color:var(--muted)}
   .teach{padding:0 18px 16px;color:var(--muted);font-size:12.5px}
 
+  .nomatch-form{margin-top:16px;padding-top:16px;border-top:1px solid var(--line);text-align:left}
+  .nomatch-form p{margin:0 0 12px;color:var(--muted);font-size:13.5px}
+  .nomatch-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+  .nomatch-grid label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
+  .nomatch-grid input{padding:10px 12px;font-size:14px}
+
   @media (max-width:820px){
     .board{grid-template-columns:1fr}
     .spine{gap:0}
@@ -427,11 +433,10 @@ async function research(){
     const ref = parsed.ref;
     if(!ref){
       resetSpine();
+      setStage("T","done"); flowLink(2,true);
       if(parsed.pipeline?.demoMode) showDemoBanner(parsed.pipeline.note || parsed.note);
       else hideDemoBanner();
-      resEl.innerHTML = `<div class="pad"><div class="empty" style="padding:14px 0">
-        <p class="big">Nothing comparable in your inventory yet</p>
-        <p>${esc(parsed.note || "You don't own anything in the same category, so there's nothing to compare this against.")}</p></div></div>`;
+      renderNoMatch(parsed);
     } else {
       selectedId = ref.id;
       renderInventory();
@@ -494,6 +499,65 @@ function renderResult(res){
     </div>`;
 
   $("#finalize").onclick = ()=>finalize(res);
+}
+
+function renderNoMatch(res){
+  const p = res.suggestedProduct || res.product || {};
+  const query = res.query || qEl.value.trim();
+  resEl.innerHTML = `
+    <div class="pad">
+      <div class="empty" style="padding:8px 0 0">
+        <p class="big">Nothing comparable in your inventory yet</p>
+        <p>${esc(res.note || "You don't own anything in the same category, so there's nothing to compare this against.")}</p>
+      </div>
+      <div class="nomatch-form">
+        <p>No match to compare — but you can still <strong>LOAD</strong> this product into the warehouse for next time.</p>
+        <div class="nomatch-grid">
+          <label>Category<input id="nmCat" type="text" value="${esc(p.category || "Device")}"></label>
+          <label>Brand<input id="nmBrand" type="text" value="${esc(p.brand || query.split(" ")[0] || "")}"></label>
+          <label>Model<input id="nmModel" type="text" value="${esc(p.model || query)}"></label>
+          <label>Price<input id="nmPrice" type="text" value="${esc(p.price || "")}" placeholder="optional"></label>
+        </div>
+        <button class="btn ghost" id="loadUnmatched">Load to inventory →</button>
+      </div>
+    </div>`;
+
+  $("#loadUnmatched").onclick = ()=>loadUnmatchedToInventory(query);
+}
+
+async function loadUnmatchedToInventory(query){
+  setStage("L","active");
+  const product = {
+    category: $("#nmCat").value.trim(),
+    brand: $("#nmBrand").value.trim(),
+    model: $("#nmModel").value.trim(),
+    price: $("#nmPrice").value.trim(),
+    releaseYear: String(new Date().getFullYear()),
+  };
+  if(!product.category || !product.brand || !product.model){
+    alert("Category, brand, and model are required.");
+    setStage("L","");
+    return;
+  }
+  try{
+    const r = await fetch(`${API}/api/append`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ product, query })
+    });
+    const data = await r.json();
+    if(!r.ok || !data.success) throw new Error(data.message || "Could not load to inventory.");
+    INVENTORY.push(data.item);
+    selectedId = data.item.id;
+    renderInventory(data.item.id);
+    await refreshPipeline();
+    setStage("L","done");
+    toast();
+    resEl.innerHTML = `<div class="empty"><p class="big">Loaded to inventory ✓</p><p>${esc(data.item.brand)} ${esc(data.item.model)} is now in your warehouse. Search again to compare against it next time.</p></div>`;
+  }catch(e){
+    setStage("L","");
+    alert(e.message || "Could not load to inventory.");
+  }
 }
 
 /* ---- LOAD: write the finalized purchase into the warehouse ---- */

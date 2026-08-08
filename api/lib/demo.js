@@ -1,3 +1,30 @@
+function inferProductStub(query) {
+  const q = String(query || "").trim();
+  const lower = q.toLowerCase();
+  let category = "Device";
+  let brand = q.split(/\s+/)[0] || "Unknown";
+  let model = q;
+
+  if (/macbook|mac book|laptop|thinkpad|xps/i.test(lower)) {
+    category = "Laptop";
+    brand = /macbook|mac book/i.test(lower) ? "Apple" : brand;
+  } else if (/ipad|tablet|tab s/i.test(lower)) {
+    category = "Tablet";
+    brand = /ipad/i.test(lower) ? "Apple" : brand;
+  } else if (/iphone|phone|pixel|galaxy|oneplus/i.test(lower)) {
+    category = "Phone";
+    brand = /iphone/i.test(lower) ? "Apple" : brand;
+  } else if (/earbud|airpod|headphone/i.test(lower)) {
+    category = "Wireless Earbuds";
+  } else if (/watch|fitbit|garmin/i.test(lower)) {
+    category = "Smartwatch";
+  } else if (/speaker|soundbar/i.test(lower)) {
+    category = "Bluetooth Speaker";
+  }
+
+  return { category, brand, model, price: "", releaseYear: String(new Date().getFullYear()) };
+}
+
 function pickMatch(inventory, query) {
   const q = query.toLowerCase();
   const rules = [
@@ -12,8 +39,9 @@ function pickMatch(inventory, query) {
       return inventory.find((item) => item.id === rule.id) || null;
     }
   }
-  return inventory[0] || null;
+  return null;
 }
+
 function demoComparison(ref, query) {
   const keys = Object.keys(ref).filter((k) => k !== "id" && k !== "category");
   const comparison = keys.slice(0, 5).map((key, index) => {
@@ -39,14 +67,24 @@ function demoComparison(ref, query) {
   comparison.forEach((row) => { if (row.spec in product) product[row.spec] = row.new; });
   return { matchedId: ref.id, product, comparison, verdict, reason: "Workshop demo comparison using warehouse data already on the server.", note: "", demoMode: true };
 }
+
 function buildDemoResult(inventory, query) {
-  if (/macbook|laptop|computer|ipad|tablet|phone/i.test(query)) {
-    return { matchedId: null, product: {}, comparison: [], verdict: "skip", reason: "", note: `Your warehouse has no laptops/tablets. "${query}" cannot be matched — but the backend still READ stored inventory instead of reloading your sheet.`, demoMode: true };
-  }
   const ref = pickMatch(inventory, query);
   if (!ref) {
-    return { matchedId: null, product: {}, comparison: [], verdict: "skip", reason: "", note: `You do not own anything comparable to "${query}" yet.`, demoMode: true };
+    const suggestedProduct = inferProductStub(query);
+    return {
+      matchedId: null,
+      product: {},
+      suggestedProduct,
+      comparison: [],
+      verdict: "skip",
+      reason: "",
+      note: `Your warehouse has no ${suggestedProduct.category.toLowerCase()} yet. You can still LOAD "${query}" into inventory for future comparisons.`,
+      demoMode: true,
+      canLoad: true,
+    };
   }
   return demoComparison(ref, query);
 }
-module.exports = { buildDemoResult };
+
+module.exports = { buildDemoResult, inferProductStub };
