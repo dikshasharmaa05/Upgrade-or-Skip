@@ -427,6 +427,8 @@ async function research(){
     const ref = parsed.ref;
     if(!ref){
       resetSpine();
+      if(parsed.pipeline?.demoMode) showDemoBanner(parsed.pipeline.note || parsed.note);
+      else hideDemoBanner();
       resEl.innerHTML = `<div class="pad"><div class="empty" style="padding:14px 0">
         <p class="big">Nothing comparable in your inventory yet</p>
         <p>${esc(parsed.note || "You don't own anything in the same category, so there's nothing to compare this against.")}</p></div></div>`;
@@ -436,6 +438,11 @@ async function research(){
       lastResult = { query, ref, ...parsed };
       renderResult(lastResult);
       setStage("T","done"); flowLink(2,true);
+    }
+    if(parsed.pipeline?.demoMode){
+      showDemoBanner(parsed.pipeline.note);
+    } else {
+      hideDemoBanner();
     }
     await refreshPipeline();
   }catch(e){
@@ -517,6 +524,20 @@ async function finalize(res){
 function toast(){
   const t = $("#toast"); t.classList.add("show");
   setTimeout(()=>t.classList.remove("show"), 1900);
+}
+function showDemoBanner(text){
+  let b = $("#demoBanner");
+  if(!b){
+    b = document.createElement("p");
+    b.id = "demoBanner";
+    b.style.cssText = "margin:0 0 14px;padding:10px 12px;border:1px solid var(--amber);border-radius:10px;color:var(--amber);font-size:12.5px;background:rgba(242,179,75,.08)";
+    $("#result").parentElement.insertBefore(b, $("#result"));
+  }
+  b.textContent = text || "Workshop demo mode: warehouse READ is live. Add ANTHROPIC_API_KEY on Vercel for real product research.";
+}
+function hideDemoBanner(){
+  const b = $("#demoBanner");
+  if(b) b.remove();
 }
 
 /* ============================================================
